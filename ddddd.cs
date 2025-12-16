@@ -144,3 +144,109 @@
         }
     }
 }
+
+// Обработчик события TextChanged для textBox3
+// Вызывается КАЖДЫЙ РАЗ, когда пользователь меняет текст в textBox3
+private void textBox3_TextChanged_1(object sender, EventArgs e)
+{
+    // try нужен, чтобы программа НЕ УПАЛА при ошибке
+    // Например: null-значения, проблемы с БД и т.п.
+    try
+    {
+        // Берём текст из textBox3
+        // Trim() — убирает пробелы в начале и конце
+        // ToLowerInvariant() — переводит текст в нижний регистр
+        // Это нужно для поиска БЕЗ учёта регистра
+        string q = textBox3.Text.Trim().ToLowerInvariant();
+
+        // Проверяем: пустая ли строка поиска
+        // Если пользователь удалил весь текст
+        if (string.IsNullOrEmpty(q))
+        {
+            // Загружаем ВСЕ данные без фильтра
+            // Если этого не сделать — таблица останется пустой
+            LaeCarService();
+            return; // Выходим из метода, чтобы код ниже не выполнялся
+        }
+
+        // Запрос к базе данных через Entity Framework
+        var list = _db.CarServices
+
+            // Подгружаем связанную таблицу Car
+            // Если убрать Include — cs.Car будет null
+            // и cs.Car.Brand вызовет ошибку
+            .Include(cs => cs.Car)
+
+            // Подгружаем связанную таблицу Service
+            // Без этого cs.Service будет null
+            .Include(cs => cs.Service)
+
+            // Фильтрация данных (WHERE в SQL)
+            .Where(cs =>
+
+                // Проверяем, что машина существует (не null)
+                // Без этого будет NullReferenceException
+                (cs.Car != null && (
+
+                    // Поиск по марке автомобиля
+                    // ToLower() — чтобы сравнивать с q
+                    cs.Car.Brand.ToLower().Contains(q)
+
+                    // ИЛИ поиск по модели
+                    || cs.Car.Model.ToLower().Contains(q)
+
+                    // ИЛИ поиск по номеру регистрации
+                    || cs.Car.RegistrationNumber.ToLower().Contains(q)
+                ))
+
+                // ИЛИ поиск по названию услуги
+                // Проверка cs.Service != null — защита от ошибки
+                || (cs.Service != null && cs.Service.Name.ToLower().Contains(q))
+
+                // ИЛИ поиск по пробегу
+                // Mileage — число, поэтому:
+                // ToString() превращает его в текст
+                || cs.Mileage.ToString().Contains(q)
+            )
+
+            // Select — выбираем, ЧТО именно попадёт в таблицу
+            // Создаём АНОНИМНЫЙ ОБЪЕКТ
+            .Select(cs => new
+            {
+                // Строка с информацией об авто
+                // Если убрать Select — DataGridView покажет ВСЮ сущность
+                Auto = cs.Car.Brand + " " +
+                       cs.Car.Model + " (" +
+                       cs.Car.RegistrationNumber + ")",
+
+                // Название услуги
+                Service = cs.Service.Name,
+
+                // Цена услуги
+                Price = cs.Service.Price,
+
+                // Дата обслуживания
+                // ToShortDateString() — короткий формат даты
+                // Без этого будет длинная дата с временем
+                Date = cs.DateOfService.ToShortDateString(),
+
+                // Пробег
+                Mileage = cs.Mileage
+            })
+
+            // Выполняем запрос к БД
+            // Без ToList() запрос НЕ выполнится
+            .ToList();
+
+        // Устанавливаем источник данных для DataGridView
+        // Именно здесь данные появляются в таблице
+        dataGridView4.DataSource = list;
+    }
+    catch (Exception ex)
+    {
+        // Если произошла ЛЮБАЯ ошибка:
+        // показываем сообщение вместо падения программы
+        MessageBox.Show("Viga otsimisel: " + ex.Message);
+    }
+}
+
