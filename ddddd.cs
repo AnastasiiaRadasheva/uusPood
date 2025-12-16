@@ -250,3 +250,96 @@ private void textBox3_TextChanged_1(object sender, EventArgs e)
     }
 }
 
+// Обработчик нажатия кнопки AutoVali
+private void AutoVali_Click(object sender, EventArgs e)
+{
+    // Проверяем: выбрана ли хотя бы одна строка в DataGridView с владельцами
+    if (dataGridViewOmanik.SelectedRows.Count == 0)
+    {
+        // Если не выбрано ни одной строки — показываем сообщение
+        MessageBox.Show("Palun valige omaniku, kellele lisada autod.");
+
+        // Прерываем выполнение метода, дальше код НЕ выполнится
+        return;
+    }
+
+    // Берём ID владельца из первой выбранной строки
+    // Cells["Id"] — это колонка с названием "Id"
+    int ownerId = (int)dataGridViewOmanik.SelectedRows[0].Cells["Id"].Value;
+
+    // Загружаем владельца из базы данных
+    // Include(o => o.Cars) — сразу загружаем и связанные машины
+    var owner = _db.Owners
+                   .Include(o => o.Cars)
+                   .FirstOrDefault(o => o.Id == ownerId);
+
+    // Если владелец не найден в базе данных
+    if (owner == null)
+    {
+        // Показываем ошибку
+        MessageBox.Show("Valitud omanikut ei leitud!");
+
+        // Прерываем выполнение метода
+        return;
+    }
+
+    // Создаём и открываем форму Form2
+    // Передаём в неё DbContext (_db)
+    using (Form2 form2 = new Form2(_db))
+    {
+        // ShowDialog() открывает форму как модальное окно
+        // Код дальше выполнится ТОЛЬКО если нажали OK
+        if (form2.ShowDialog() == DialogResult.OK)
+        {
+            // Получаем список выбранных автомобилей
+            // Обычно это строки вида: "BMW/123ABC"
+            var selectedCarsDisplay = form2.GetSelectedCars();
+
+            // Проходим по каждому выбранному авто
+            foreach (var displayText in selectedCarsDisplay)
+            {
+                // Разделяем строку по символу '/'
+                // Например: "BMW/123ABC" → ["BMW", "123ABC"]
+                var parts = displayText.Split('/');
+
+                // Проверяем, что строка корректная
+                if (parts.Length == 2)
+                {
+                    // parts[0] — марка автомобиля
+                    string brand = parts[0];
+
+                    // parts[1] — регистрационный номер
+                    string regNum = parts[1];
+
+                    // Ищем автомобиль в базе данных
+                    var car = _db.Cars
+                                 .FirstOrDefault(c =>
+                                     c.Brand == brand &&
+                                     c.RegistrationNumber == regNum);
+
+                    // Если автомобиль найден
+                    if (car != null)
+                    {
+                        // Назначаем владельца автомобилю
+                        car.OwnerId = ownerId;
+                    }
+                }
+            }
+
+            // Сохраняем ВСЕ изменения в базе данных
+            _db.SaveChanges();
+
+            // Обновляем список владельцев на форме
+            LaeOmanikud();
+
+            // Обновляем список автомобилей
+            LaeAutod();
+
+            // Загружаем автомобили конкретного владельца
+            LaeListBoxAuto(ownerId);
+
+            // Показываем сообщение об успешной операции
+            MessageBox.Show("Valitud autod on lisatud omanikule!");
+        }
+    }
+}
